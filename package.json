@@ -1,0 +1,10 @@
+{
+  "name": "mail-queue",
+  "version": "0.0.0",
+  "description": "MailQueue",
+  "main": "app.js",
+  "private": true,
+  "author": {
+    "name": "Foxbond"
+  }
+}
