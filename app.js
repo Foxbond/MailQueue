@@ -28,7 +28,15 @@ var resolveAddress = function (addr) {
 	return addr.name + '<' + addr.mail + '>';
 };//resolveAddress
 
-var client = class MailQueueClient{
+var mailStatus = {
+	0: 'New', 'new': 0,
+	1: 'Processing', 'processing': 1,
+	2: 'Failed', 'failed': 2,
+	3: 'Sent', 'sent': 3,
+	4: 'Aborted', 'aborted': 4
+};
+
+var mailQueue = class MailQueue{
 	constructor(params) {
 		if (params.logger) {
 			this.logger = params.logger;
@@ -61,6 +69,12 @@ var client = class MailQueueClient{
 		}
 
 		this.defaultFrom = resolveAddress(params.from);
+
+		if (params.smtp.constructor.name == 'Mail') {
+			this.smtp = params.smtp;
+		} else {
+			this.smtp = nodemailer.createTransport(params.smtp);
+		}
 	}//constructor
 
 	send(message, callback) {
@@ -80,124 +94,37 @@ var client = class MailQueueClient{
 	}//add
 
 	addSingleMail(mail, callback) {
-		this.db.query('INSERT INTO ' + this.tableName + ' (mailId, mailTimestamp, mailPriority, mailStatus, mailRetries, mailFrom, mailTo, mailSubject, mailContent, mailContentHtml) VALUES (NULL, ?, ?, ?, 0, ?, ?, ?, ?, ?)', [
-			(+new Date()),
-			(typeof mail.priority === 'undefined' ? this.defaultPriority : parseInt(mail.priority)),
-			mailStatus.new,
-			resolveAddress(mail.from),
-			resolveAddress(mail.to),
-			mail.subject,
-			(typeof mail.text === 'string' ? mail.text : this.noHtml),
-			mail.html], function (err, res) {
-				if (err) return callback(err, 0);
+		var hack = this;
+		this.smtp.sendMail(mail, function (error, response) {
+			var status = mailStatus.sent;
+			if (error) {
+				log.error('sendMail failed!', error);
+				status = mailStatus.failed;
+			}
 
-				return callback(null, res.insertId);
-			});
+			hack.db.query('INSERT INTO ' + hack.tableName + ' (mailId, mailTimestamp, mailPriority, mailStatus, mailRetries, mailFrom, mailTo, mailSubject, mailContent, mailContentHtml) VALUES (NULL, ?, ?, ?, 0, ?, ?, ?, ?, ?)', [
+				(+new Date()),
+				(typeof mail.priority === 'undefined' ? hack.defaultPriority : parseInt(mail.priority)),
+				status,
+				resolveAddress(mail.from),
+				resolveAddress(mail.to),
+				mail.subject,
+				(typeof mail.text === 'string' ? mail.text : hack.noHtml),
+				mail.html], function (err, res) {
+					if (err) return callback(err, 0);
+
+					return callback((status == status.failed ? error : null), res.insertId);
+				});
+		});
 	}//addSingleMail
 
 };
 
 var server = class MailQueueServer{
-	constructor(params) {
-		if (params.logger) {
-			this.logger = params.logger;
-		} else {
-			this.logger = dummyLogger;
-		}
-
-		if (params.db.constructor.name == 'Pool' || params.db.constructor.name == 'Connection') {
-			this.db = params.db;
-		} else {
-			this.db = mysql.createConnection(params.db);
-		}
-
-		if (typeof params.tableName !== 'string') {
-			this.tableName = 'mailQueue';
-		} else {
-			this.tableName = params.tableName;
-		}
-
-		this.defaultFrom = resolveAddress(params.from);
-
-		if (params.smtp.constructor.name == 'Mail') {
-			this.smtp = params.smtp;
-		} else {
-			this.smtp = nodemailer.createTransport(params.smtp);
-		}
-
-		if (typeof params.numRetries !== 'undefined') {
-			this.numRetries = parseInt(params.numRetries);
-		} else {
-			this.numRetries = 3;
-		}
-
-		if (typeof params.batchLimit !== 'undefined') {
-			this.batchLimit = parseInt(params.batchLimit);
-		} else {
-			this.batchLimit = 10;
-		}
-	}//constructor
-
-
-	dedicated() {
-
-	}//dedicated
-
-	batch(limit, callback) {
-		var hack = this;
-
-		var _batch = function _batch(limit, callback, dbc) {
-			dbc.beginTransaction(function (err) {
-				if (err) {
-					return callback(err);
-				}
-
-				dbc.query('SELECT * FROM ' + hack.tableName + ' ' +
-					'WHERE mailStatus=0 or (mailStatus=2 AND mailRetries<' + hack.numRetries+') ' +
-					'ORDER BY mailPriority DESC, mailStatus DESC, mailRetries DESC, mailTimestamp ASC ' +
-					'LIMIT 0, ' + (typeof limit !== 'undefined' ? parseInt(limit) : hack.batchLimit) + ' ' +
-					'FOR UPDATE', function (err, data) {
-						if (err) {
-							return callback(err);
-						}
-						
-						var ids = [];
-						data.forEach(function (rowData) {
-							ids.push(rowData.mailId);
-						});
-						
-
-						dbc.release();
-				});
-			});
-		};
-
-		if (this.db.constructor.name == 'Pool') {
-			this.db.getConnection(function (err, connection) {
-				if (err) {
-					return callback(err);
-				}
-				_batch(limit, callback, connection);
-			});
-		} else {
-			_batch(limit, callback, this.db);
-		}
-		
-	}//batch
 
 	send(mail, callback) {
-		this.smtp.sendMail(mail, callback);
+		
 	}//send
 };
 
-var mailStatus = {
-	0: 'New',			'new': 0,
-	1: 'Processing',	'processing': 1,
-	2: 'Failed',		'failed': 2,
-	3: 'Sent',			'sent': 3,
-	4: 'Aborted',		'aborted': 4
-};
-
-module.exports.client = client;
-module.exports.server = server;
-module.exports.mailStatus = mailStatus;
+module.exports = mailQueue;

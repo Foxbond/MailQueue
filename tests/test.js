@@ -29,29 +29,28 @@ var db = mysql.createPool(require('../config/mysql.cfg'));
 
 log.info('Hello!');
 
-var mailQueueClient = new mailQueue.client({
+var mailQueue = new mailQueue({
 	db: db,
+	smtp: require('../config/smtp.cfg'),
 	logger: log,
 	tableName: 'mailQueue',
-	from: 'mailqueue@foxbond.info'
-});
-
-var mailQueueClient2 = new mailQueue.client({
-	db: require('../config/mysql.cfg'),
-	from: 'mailqueue@foxbond.info'
+	from: 'mailqueue@foxbond.info',
+	numRetries: 3,
+	batchLimit: 10,
+	defaultPriority:0
 });
 
 var mail = {
-	from: "",
-	to: "",
+	from: "mailqueue@foxbond.info",
+	to: "foxbondpl@gmail.com",
 	subject: "Send Email Using Node.js",
 	text: "text",
 	html: "<b>html</b>"
 }
 
-mailQueueClient.send([mail, mail], function (err, mailIds) {
+mailQueue.send([mail], function (err, mailIds) {
 	if (err) {
 		log.error(err);
 	}
-	log.info('Sent! (mailId:'+mailIds+')');
+	log.info('Sent! (mailId:' + mailIds + ')');
 });
