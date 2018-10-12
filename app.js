@@ -17,6 +17,17 @@ var dummyLogger = {
 	}
 };
 
+var resolveAddress = function (addr) {
+	if (typeof addr === 'string') {
+		return addr;
+	}
+	if (addr instanceof Array) {
+		return addr[0] + '<' + addr[1] + '>';
+	}
+
+	return addr.name + '<' + addr.mail + '>';
+};//resolveAddress
+
 var client = class MailQueueClient{
 	constructor(params) {
 		if (params.logger) {
@@ -49,7 +60,7 @@ var client = class MailQueueClient{
 			this.noHtml = params.noHtml;
 		}
 
-		this.defaultFrom = this.resolveAddress(params.from);
+		this.defaultFrom = resolveAddress(params.from);
 	}//constructor
 
 	send(message, callback) {
@@ -73,8 +84,8 @@ var client = class MailQueueClient{
 			(+new Date()),
 			(typeof mail.priority === 'undefined' ? this.defaultPriority : parseInt(mail.priority)),
 			mailStatus.new,
-			this.resolveAddress(mail.from),
-			this.resolveAddress(mail.to),
+			resolveAddress(mail.from),
+			resolveAddress(mail.to),
 			mail.subject,
 			(typeof mail.text === 'string' ? mail.text : this.noHtml),
 			mail.html], function (err, res) {
@@ -83,17 +94,6 @@ var client = class MailQueueClient{
 				return callback(null, res.insertId);
 			});
 	}//addSingleMail
-
-	resolveAddress(addr) {
-		if (typeof addr === 'string') {
-			return addr;
-		}
-		if (addr instanceof Array) {
-			return addr[0] + '<' + addr[1]+'>';
-		}
-
-		return addr.name + '<' + addr.mail + '>';
-	}//resolveAddress
 
 };
 
@@ -112,11 +112,82 @@ var server = class MailQueueServer{
 		}
 
 		if (typeof params.tableName !== 'string') {
-			throw Error('Invalid configuration');
+			this.tableName = 'mailQueue';
+		} else {
+			this.tableName = params.tableName;
 		}
 
-	}
+		this.defaultFrom = resolveAddress(params.from);
 
+		if (params.smtp.constructor.name == 'Mail') {
+			this.smtp = params.smtp;
+		} else {
+			this.smtp = nodemailer.createTransport(params.smtp);
+		}
+
+		if (typeof params.numRetries !== 'undefined') {
+			this.numRetries = parseInt(params.numRetries);
+		} else {
+			this.numRetries = 3;
+		}
+
+		if (typeof params.batchLimit !== 'undefined') {
+			this.batchLimit = parseInt(params.batchLimit);
+		} else {
+			this.batchLimit = 10;
+		}
+	}//constructor
+
+
+	dedicated() {
+
+	}//dedicated
+
+	batch(limit, callback) {
+		var hack = this;
+
+		var _batch = function _batch(limit, callback, dbc) {
+			dbc.beginTransaction(function (err) {
+				if (err) {
+					return callback(err);
+				}
+
+				dbc.query('SELECT * FROM ' + hack.tableName + ' ' +
+					'WHERE mailStatus=0 or (mailStatus=2 AND mailRetries<' + hack.numRetries+') ' +
+					'ORDER BY mailPriority DESC, mailStatus DESC, mailRetries DESC, mailTimestamp ASC ' +
+					'LIMIT 0, ' + (typeof limit !== 'undefined' ? parseInt(limit) : hack.batchLimit) + ' ' +
+					'FOR UPDATE', function (err, data) {
+						if (err) {
+							return callback(err);
+						}
+						
+						var ids = [];
+						data.forEach(function (rowData) {
+							ids.push(rowData.mailId);
+						});
+						
+
+						dbc.release();
+				});
+			});
+		};
+
+		if (this.db.constructor.name == 'Pool') {
+			this.db.getConnection(function (err, connection) {
+				if (err) {
+					return callback(err);
+				}
+				_batch(limit, callback, connection);
+			});
+		} else {
+			_batch(limit, callback, this.db);
+		}
+		
+	}//batch
+
+	send(mail, callback) {
+		this.smtp.sendMail(mail, callback);
+	}//send
 };
 
 var mailStatus = {

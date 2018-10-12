@@ -29,7 +29,6 @@ var db = mysql.createPool(require('../config/mysql.cfg'));
 
 log.info('Hello!');
 
-
 var mailQueueClient = new mailQueue.client({
 	db: db,
 	logger: log,
@@ -40,13 +39,6 @@ var mailQueueClient = new mailQueue.client({
 var mailQueueClient2 = new mailQueue.client({
 	db: require('../config/mysql.cfg'),
 	from: 'mailqueue@foxbond.info'
-});
-
-var mailQueueServer = new mailQueue.server({
-	db: require('../config/mysql.cfg'),
-	smtp: require('../config/smtp.cfg'),
-	logger: log,
-	tableName: 'mailQueue'
 });
 
 var mail = {

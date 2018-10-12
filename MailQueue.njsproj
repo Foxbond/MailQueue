@@ -12,7 +12,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>904ceedd-0f64-4a0f-86b9-5867cc10e916</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>tests/test.js</StartupFile>
+    <StartupFile>tests\parseQ.js</StartupFile>
     <StartWebBrowser>False</StartWebBrowser>
     <SearchPath>
     </SearchPath>
@@ -37,7 +37,10 @@
     <Compile Include="tests\nodemailer.js">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="tests\test.js">
+    <Compile Include="tests\addMail.js">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="tests\parseQ.js">
       <SubType>Code</SubType>
     </Compile>
     <Content Include=".gitignore" />
