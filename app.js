@@ -98,7 +98,7 @@ var mailQueue = class MailQueue{
 		this.smtp.sendMail(mail, function (error, response) {
 			var status = mailStatus.sent;
 			if (error) {
-				log.error('sendMail failed!', error);
+				this.logger.error('sendMail failed!', error);
 				status = mailStatus.failed;
 			}
 
@@ -118,13 +118,6 @@ var mailQueue = class MailQueue{
 		});
 	}//addSingleMail
 
-};
-
-var server = class MailQueueServer{
-
-	send(mail, callback) {
-		
-	}//send
 };
 
 module.exports = mailQueue;

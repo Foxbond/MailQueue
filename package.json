@@ -6,7 +6,7 @@
 	"main": "app.js",
 	"name": "MailQueue",
 	"private": true,
-	"version": "0.0.0",
+	"version": "1.0.1",
 	"dependencies": {
 		"async": "^2.6.1",
 		"mysql": "^2.16.0",
