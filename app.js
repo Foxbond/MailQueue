@@ -12,7 +12,7 @@ var dummyLogger = {
 		console.log(this.timestamp() + ' info: ' + msg);
 	},
 
-	error: function error() {
+	error: function error(msg) {
 		console.log(this.timestamp() + ' error: ' + msg);
 	}
 };
@@ -96,9 +96,10 @@ var mailQueue = class MailQueue{
 	addSingleMail(mail, callback) {
 		var hack = this;
 		this.smtp.sendMail(mail, function (error, response) {
+			
 			var status = mailStatus.sent;
 			if (error) {
-				this.logger.error('sendMail failed!', error);
+				hack.logger.error('sendMail failed!', error);
 				status = mailStatus.failed;
 			}
 
@@ -112,8 +113,8 @@ var mailQueue = class MailQueue{
 				(typeof mail.text === 'string' ? mail.text : hack.noHtml),
 				mail.html], function (err, res) {
 					if (err) return callback(err, 0);
-
-					return callback((status == status.failed ? error : null), res.insertId);
+					
+					return callback((status == mailStatus.failed ? error : null), res.insertId);
 				});
 		});
 	}//addSingleMail
